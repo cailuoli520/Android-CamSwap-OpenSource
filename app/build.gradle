@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace 'com.example.camswap'
+    namespace 'io.github.zensu357.camswap'
     compileSdk 34
 
     // Auto-versioning logic
@@ -30,7 +30,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.example.camswap"
+        applicationId "io.github.zensu357.camswap"
         minSdk 26
         targetSdk 34
         versionCode versionCodeInt

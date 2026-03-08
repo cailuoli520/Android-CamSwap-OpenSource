@@ -5,11 +5,11 @@
 -keepclassmembers class de.robv.android.xposed.** { *; }
 
 # Keep Xposed Entry Point
--keep class com.example.camswap.HookMain { *; }
--keepclassmembers class com.example.camswap.HookMain { *; }
+-keep class io.github.zensu357.camswap.HookMain { *; }
+-keepclassmembers class io.github.zensu357.camswap.HookMain { *; }
 
 # Keep Application Classes
--keep class com.example.camswap.** { *; }
+-keep class io.github.zensu357.camswap.** { *; }
 
 # Android Components
 -keep public class * extends android.app.Activity
