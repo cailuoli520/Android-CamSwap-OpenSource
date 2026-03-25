@@ -6,6 +6,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -27,6 +29,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import io.github.libxposed.service.XposedService
+import io.github.libxposed.service.XposedServiceHelper
 import io.github.zensu357.camswap.ui.*
 import io.github.zensu357.camswap.ui.theme.CamSwapTheme
 import androidx.compose.ui.unit.dp
@@ -38,6 +42,7 @@ class MainActivity : ComponentActivity() {
 
     private val mainViewModel: MainViewModel by viewModels()
     private val mediaViewModel: MediaManagerViewModel by viewModels()
+    private var xposedService: XposedService? = null
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -73,6 +78,26 @@ class MainActivity : ComponentActivity() {
                 e.printStackTrace()
             }
         }
+
+        // Register XposedServiceHelper to detect module activation
+        XposedServiceHelper.registerListener(object : XposedServiceHelper.OnServiceListener {
+            override fun onServiceBind(service: XposedService) {
+                xposedService = service
+                mainViewModel.updateXposedStatus(true)
+            }
+
+            override fun onServiceDied(service: XposedService) {
+                xposedService = null
+                mainViewModel.updateXposedStatus(false)
+            }
+        })
+
+        // If service doesn't bind within 5s, consider module inactive
+        Handler(Looper.getMainLooper()).postDelayed({
+            if (xposedService == null) {
+                mainViewModel.updateXposedStatus(false)
+            }
+        }, 5000)
 
         setContent {
             CamSwapTheme {
@@ -176,14 +201,6 @@ class MainActivity : ComponentActivity() {
     private fun checkPermissionsStatus() {
         val hasPermission = hasRequiredPermissions()
         mainViewModel.updatePermissionStatus(hasPermission)
-        mainViewModel.updateXposedStatus(isModuleActive())
-    }
-
-    // The module (running in hooked target apps) calls VideoProvider.call("mark_active")
-    // which writes a timestamp to SharedPreferences. Check that here.
-    private fun isModuleActive(): Boolean {
-        val prefs = getSharedPreferences("module_status", MODE_PRIVATE)
-        return prefs.getLong("last_active", 0L) > 0L
     }
 
     private fun checkAndRequestPermissions() {

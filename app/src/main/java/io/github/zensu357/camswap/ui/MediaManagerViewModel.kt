@@ -89,7 +89,7 @@ class MediaManagerViewModel(application: Application) : AndroidViewModel(applica
             
             // Load Videos
             val videoFiles = mediaDir.listFiles { _, name ->
-                @Suppress("DEPRECATION") val lowerName = name.toLowerCase(Locale.getDefault())
+                val lowerName = name.lowercase(Locale.getDefault())
                 lowerName.endsWith(".mp4") || lowerName.endsWith(".mov") || lowerName.endsWith(".avi") || lowerName.endsWith(".mkv")
             }?.toList() ?: emptyList()
 
@@ -112,7 +112,7 @@ class MediaManagerViewModel(application: Application) : AndroidViewModel(applica
 
             // Load Images
             val imageFiles = mediaDir.listFiles { _, name ->
-                @Suppress("DEPRECATION") val lowerName = name.toLowerCase(Locale.getDefault())
+                val lowerName = name.lowercase(Locale.getDefault())
                 lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".png") || lowerName.endsWith(".bmp")
             }?.toList() ?: emptyList()
 
@@ -122,7 +122,7 @@ class MediaManagerViewModel(application: Application) : AndroidViewModel(applica
 
             // Load Audios
             val audioFiles = mediaDir.listFiles { _, name ->
-                @Suppress("DEPRECATION") val lowerName = name.toLowerCase(Locale.getDefault())
+                val lowerName = name.lowercase(Locale.getDefault())
                 lowerName.endsWith(".mp3") || lowerName.endsWith(".wav") || lowerName.endsWith(".aac")
                     || lowerName.endsWith(".m4a") || lowerName.endsWith(".ogg") || lowerName.endsWith(".flac")
             }?.toList() ?: emptyList()

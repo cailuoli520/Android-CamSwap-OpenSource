@@ -228,13 +228,6 @@ public class HookMain {
 
                         PermissionHelper.checkAndSetupPaths(toast_content, packageName);
 
-                        // Notify CamSwap app that the module is active via ContentProvider
-                        try {
-                            toast_content.getContentResolver().call(
-                                    IpcContract.CONTENT_URI, "mark_active", null, null);
-                        } catch (Throwable ignored) {
-                        }
-
                         // If provider is not available yet (CamSwap app not started),
                         // schedule background retries so config/video become available
                         // before the camera is actually opened.
