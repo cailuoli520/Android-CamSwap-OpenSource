@@ -53,6 +53,9 @@
     <string name="settings_category_general">General Settings</string>
     <string name="settings_notification_control">Enable Notification Control</string>
     <string name="settings_notification_control_desc">Quick switch video in notification</string>
+    <string name="settings_overlay_control">Enable Floating Overlay Control</string>
+    <string name="settings_overlay_control_desc">Show a draggable floating bubble for quick switch and rotate actions</string>
+    <string name="settings_overlay_permission_desc">Overlay permission is required to show the floating control bubble</string>
     <string name="settings_play_sound">Play Sound</string>
     <string name="settings_play_sound_desc">Play original audio when replacing</string>
     <string name="settings_mic_hook">Microphone Hook</string>
@@ -112,6 +115,8 @@
     <string name="notif_action_exit">Exit</string>
     <string name="notif_channel_name">Camswap Control Service</string>
     <string name="notif_channel_desc">Show Camswap video control</string>
+    <string name="overlay_action_rotate">Rotate</string>
+    <string name="overlay_action_close">Close</string>
 
     <!-- Home Screen - Version Card -->
     <string name="version_current">Current Version</string>

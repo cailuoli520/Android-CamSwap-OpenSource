@@ -289,3 +289,4 @@ API101_MIGRATION_PLAN.md
 app/bin/build/generated/source/buildConfig/debug/io/github/zensu357/camswap/BuildConfig.class
 memory/MEMORY.md
 memory/project_overview.md
+.settings/org.eclipse.buildship.core.prefs

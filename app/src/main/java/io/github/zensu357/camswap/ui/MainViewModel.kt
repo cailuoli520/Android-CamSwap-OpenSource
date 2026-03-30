@@ -26,6 +26,7 @@ data class MainUiState(
     val enablePhotoFake: Boolean = false,
 
     val notificationControlEnabled: Boolean = false,
+    val overlayControlEnabled: Boolean = false,
     val hasPermission: Boolean = false,
     val isXposedActive: Boolean = false,
     val targetAppsCount: Int = 0,
@@ -65,6 +66,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     micHookMode = configManager.getString(ConfigManager.KEY_MIC_HOOK_MODE, ConfigManager.MIC_MODE_MUTE),
                     enablePhotoFake = configManager.getBoolean(ConfigManager.KEY_ENABLE_PHOTO_FAKE, false),
                     notificationControlEnabled = configManager.getBoolean(ConfigManager.KEY_NOTIFICATION_CONTROL_ENABLED, false),
+                    overlayControlEnabled = configManager.getBoolean(ConfigManager.KEY_OVERLAY_CONTROL_ENABLED, false),
                     targetAppsCount = configManager.targetPackages.size,
                     originalVideoName = configManager.getString(ConfigManager.KEY_ORIGINAL_VIDEO_NAME, null),
                     // Stream config
@@ -139,6 +141,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             configManager.setBoolean(ConfigManager.KEY_NOTIFICATION_CONTROL_ENABLED, enabled)
             _uiState.update { it.copy(notificationControlEnabled = enabled) }
+        }
+    }
+
+    fun setOverlayControlEnabled(enabled: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            configManager.setBoolean(ConfigManager.KEY_OVERLAY_CONTROL_ENABLED, enabled)
+            _uiState.update { it.copy(overlayControlEnabled = enabled) }
         }
     }
 

@@ -89,6 +89,49 @@ fun SettingsScreen(viewModel: MainViewModel) {
             SettingsDivider()
 
             SettingsSwitchRow(
+                    icon = Icons.Default.Videocam,
+                    title = stringResource(R.string.settings_overlay_control),
+                    subtitle = stringResource(R.string.settings_overlay_control_desc),
+                    checked = uiState.overlayControlEnabled,
+                    onCheckedChange = { enabled ->
+                        val intent =
+                                Intent(context, io.github.zensu357.camswap.OverlayControlService::class.java)
+                        if (enabled) {
+                            if (Settings.canDrawOverlays(context)) {
+                                viewModel.setOverlayControlEnabled(true)
+                                context.startService(intent)
+                            } else {
+                                viewModel.setOverlayControlEnabled(true)
+                                val permissionIntent =
+                                        Intent(
+                                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                                Uri.parse("package:${context.packageName}")
+                                        )
+                                context.startActivity(permissionIntent)
+                            }
+                        } else {
+                            viewModel.setOverlayControlEnabled(false)
+                            context.stopService(intent)
+                        }
+                    }
+            )
+
+            AnimatedVisibility(
+                    visible = uiState.overlayControlEnabled && !Settings.canDrawOverlays(context),
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+            ) {
+                Text(
+                        text = stringResource(R.string.settings_overlay_permission_desc),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.padding(start = 36.dp, top = 4.dp)
+                )
+            }
+
+            SettingsDivider()
+
+            SettingsSwitchRow(
                     icon = Icons.Default.VolumeUp,
                     title = stringResource(R.string.settings_play_sound),
                     subtitle = stringResource(R.string.settings_play_sound_desc),

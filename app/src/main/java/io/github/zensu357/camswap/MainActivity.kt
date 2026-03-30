@@ -79,6 +79,17 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        if (configManager.getBoolean(ConfigManager.KEY_OVERLAY_CONTROL_ENABLED, false)
+            && Settings.canDrawOverlays(this)
+        ) {
+            try {
+                val intent = Intent(this, OverlayControlService::class.java)
+                startService(intent)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
         // Register XposedServiceHelper to detect module activation
         XposedServiceHelper.registerListener(object : XposedServiceHelper.OnServiceListener {
             override fun onServiceBind(service: XposedService) {
@@ -196,6 +207,17 @@ class MainActivity : ComponentActivity() {
         checkPermissionsStatus()
         mainViewModel.loadConfig()
         mediaViewModel.loadMedia()
+
+        val configManager = ConfigManager()
+        if (configManager.getBoolean(ConfigManager.KEY_OVERLAY_CONTROL_ENABLED, false)
+            && Settings.canDrawOverlays(this)
+        ) {
+            try {
+                startService(Intent(this, OverlayControlService::class.java))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 
     private fun checkPermissionsStatus() {

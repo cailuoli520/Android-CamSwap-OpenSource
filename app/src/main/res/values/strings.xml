@@ -53,6 +53,9 @@
     <string name="settings_category_general">常规设置</string>
     <string name="settings_notification_control">启用通知栏控制</string>
     <string name="settings_notification_control_desc">在通知栏快速切换视频</string>
+    <string name="settings_overlay_control">启用悬浮窗控制</string>
+    <string name="settings_overlay_control_desc">显示可拖动悬浮球，展开后可快速切换视频和旋转</string>
+    <string name="settings_overlay_permission_desc">需要授予悬浮窗权限才能显示控制球</string>
     <string name="settings_play_sound">播放声音</string>
     <string name="settings_play_sound_desc">替换视频时播放原声音频</string>
     <string name="settings_mic_hook">麦克风 Hook</string>
@@ -112,6 +115,8 @@
     <string name="notif_action_exit">退出</string>
     <string name="notif_channel_name">Camswap控制服务</string>
     <string name="notif_channel_desc">显示Camswap视频切换控制</string>
+    <string name="overlay_action_rotate">旋转</string>
+    <string name="overlay_action_close">关闭</string>
 
     <!-- Home Screen - Version Card -->
     <string name="version_current">当前版本</string>

@@ -42,6 +42,7 @@ public class ConfigManager {
     public static final String KEY_MIC_HOOK_MODE = "mic_hook_mode"; // "mute" | "replace" | "video_sync"
     public static final String KEY_SELECTED_AUDIO = "selected_audio"; // 音频文件名
     public static final String KEY_NOTIFICATION_CONTROL_ENABLED = "notification_control_enabled";
+    public static final String KEY_OVERLAY_CONTROL_ENABLED = "overlay_control_enabled";
     public static final String MIC_MODE_MUTE = "mute";
     public static final String MIC_MODE_REPLACE = "replace";
     public static final String MIC_MODE_VIDEO_SYNC = "video_sync";
