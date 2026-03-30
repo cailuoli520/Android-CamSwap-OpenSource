@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Android CamSwap (Open Source)
 感谢项目 [android_virtual_cam](https://github.com/w2016561536/android_virtual_cam) 为本项目提供的灵感和代码基础。
 
@@ -141,3 +142,6 @@ keyPassword=your_key_password
 ## 📄 许可证
 
 本项目基于 [GPL-3.0 license](LICENSE) 开源。
+=======
+[前往仓库查看](https://github.com/zensu357/Android-CamSwap-OpenSource) 
+>>>>>>> 97595e762e82728973469f1b39e97e894a7e4fdc
