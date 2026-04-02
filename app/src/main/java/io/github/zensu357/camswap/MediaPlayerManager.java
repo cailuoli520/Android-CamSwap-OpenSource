@@ -145,7 +145,7 @@ public final class MediaPlayerManager {
         // Release any old stream backend
         releaseStreamBackend();
 
-        int rotation = VideoManager.getConfig().getInt(ConfigManager.KEY_VIDEO_ROTATION_OFFSET, 0);
+        // 所有渲染器旋转为 0°，rotation_offset 仅通过 captureFrameForYuv 应用于 YUV 截帧
 
         // Choose primary surface: prefer preview, fallback to reader
         Surface primaryTarget = previewSurface != null ? previewSurface : readerSurface;
@@ -159,25 +159,21 @@ public final class MediaPlayerManager {
             GLVideoRenderer.releaseSafely(c2_reader_renderer);
             SurfaceRelay.releaseSafely(c2_reader_relay);
             c2_reader_renderer = GLVideoRenderer.createSafely(readerSurface, "c2_reader_stream");
-            if (c2_reader_renderer != null) c2_reader_renderer.setRotation(rotation);
         }
         if (readerSurface1 != null) {
             GLVideoRenderer.releaseSafely(c2_reader_renderer_1);
             SurfaceRelay.releaseSafely(c2_reader_relay_1);
             c2_reader_renderer_1 = GLVideoRenderer.createSafely(readerSurface1, "c2_reader_1_stream");
-            if (c2_reader_renderer_1 != null) c2_reader_renderer_1.setRotation(rotation);
         }
         if (previewSurface != null) {
             GLVideoRenderer.releaseSafely(c2_renderer);
             SurfaceRelay.releaseSafely(c2_relay);
             c2_renderer = GLVideoRenderer.createSafely(previewSurface, "c2_preview_stream");
-            if (c2_renderer != null) c2_renderer.setRotation(rotation);
         }
         if (previewSurface1 != null) {
             GLVideoRenderer.releaseSafely(c2_renderer_1);
             SurfaceRelay.releaseSafely(c2_relay_1);
             c2_renderer_1 = GLVideoRenderer.createSafely(previewSurface1, "c2_preview_1_stream");
-            if (c2_renderer_1 != null) c2_renderer_1.setRotation(rotation);
         }
 
         // Create stream backend — output to primary GL renderer's input surface
@@ -352,18 +348,12 @@ public final class MediaPlayerManager {
         }
     }
 
-    /** Update rotation on all active GL renderers (no player restart). */
+    /**
+     * 旋转偏移已更新的通知。渲染器保持 0° 旋转（应用自行处理预览旋转），
+     * rotation_offset 仅在 captureFrameForYuv 中应用于 YUV 截帧/JPEG。
+     */
     void updateRotation(int degrees) {
-        GLVideoRenderer[] all = {
-                c2_reader_renderer, c2_reader_renderer_1,
-                c2_renderer, c2_renderer_1,
-                c1_renderer_holder, c1_renderer_texture
-        };
-        for (GLVideoRenderer r : all) {
-            if (r != null && r.isInitialized())
-                r.setRotation(degrees);
-        }
-        LogUtil.log("【CS】所有渲染器旋转角度已更新: " + degrees + "°");
+        LogUtil.log("【CS】旋转偏移已更新: " + degrees + "°（渲染器保持0°，仅影响截帧）");
     }
 
     /** Release all GL renderers. */
@@ -439,7 +429,9 @@ public final class MediaPlayerManager {
             return;
         GLVideoRenderer.releaseSafely(rendererRef[0]);
         SurfaceRelay.releaseSafely(relayRef[0]);
-        int rotation = VideoManager.getConfig().getInt(ConfigManager.KEY_VIDEO_ROTATION_OFFSET, 0);
+        // 预览渲染器旋转固定为 0°：应用（如 WhatsApp）会对预览自行应用相机传感器旋转，
+        // CamSwap 不应再叠加旋转，否则本机画面会被双重旋转。
+        // video_rotation_offset 仅在 YUV 截帧时通过 captureFrameForYuv 应用，确保对方画面正确。
         rendererRef[0] = GLVideoRenderer.createSafely(targetSurface, tag);
         if (!playSound)
             player.setVolume(0, 0);
@@ -455,15 +447,15 @@ public final class MediaPlayerManager {
             player.prepare();
             if (rendererRef[0] != null) {
                 player.setSurface(rendererRef[0].getInputSurface());
-                rendererRef[0].setRotation(rotation);
-                LogUtil.log("【CS】【GL】" + tag + " 使用 GL 渲染器 (旋转:" + rotation + "°)");
+                rendererRef[0].setRotation(0);
+                LogUtil.log("【CS】【GL】" + tag + " 使用 GL 渲染器 (旋转:0°)");
             } else {
                 LogUtil.log("【CS】【Relay】" + tag + " GL 失败，尝试 SurfaceTexture 中继");
                 relayRef[0] = SurfaceRelay.createSafely(targetSurface, tag);
                 if (relayRef[0] != null) {
                     player.setSurface(relayRef[0].getInputSurface());
-                    relayRef[0].setRotation(rotation);
-                    LogUtil.log("【CS】【Relay】" + tag + " 使用 Relay 渲染器 (旋转:" + rotation + "°)");
+                    relayRef[0].setRotation(0);
+                    LogUtil.log("【CS】【Relay】" + tag + " 使用 Relay 渲染器 (旋转:0°)");
                 } else {
                     player.setSurface(targetSurface);
                     LogUtil.log("【CS】" + tag + " 回退到直接 Surface（无旋转）");

@@ -57,6 +57,8 @@ public final class Camera2SessionHook {
     private static final long YUV_CACHE_REFRESH_GL_MS = 66L;
     private static final long YUV_CACHE_REFRESH_GL_HIRES_MS = 133L;
     private static final long YUV_CACHE_REFRESH_FALLBACK_MS = 200L;
+    /** MediaCodec 直出路径刷新间隔：无 RGB 转换，可以更频繁 */
+    private static final long YUV_CACHE_REFRESH_CODEC_MS = 33L;
     /** 高分辨率阈值：超过此像素数时使用低帧率泵 */
     private static final int YUV_HIRES_PIXEL_THRESHOLD = 1280 * 720;
 
@@ -95,6 +97,8 @@ public final class Camera2SessionHook {
     private volatile long lastYuvKeepLogMs = 0L;
     /** 上一次 YUV 帧是否通过回退路径（视频文件截帧）生成 */
     private volatile boolean lastYuvFrameWasFallback = true;
+    /** 上一次 YUV 帧是否通过 MediaCodec 直出路径生成 */
+    private volatile boolean lastYuvFrameWasCodec = false;
     /** YUV 帧率统计 */
     private volatile int yuvFrameCount = 0;
     private volatile long yuvFpsWindowStartMs = 0L;
@@ -115,6 +119,8 @@ public final class Camera2SessionHook {
     // Deferred playback: set when build() fires before addTarget()
     volatile boolean pendingPlayback = false;
     private volatile boolean yuvBridgeSessionReady = false;
+    /** MediaCodec 直出 YUV 解码器，绕过 GL→Bitmap→RGB→YUV 转换链 */
+    private volatile MediaCodecYuvDecoder yuvDecoder;
 
     // Surface-change tracking: skip redundant initCamera2Players when surfaces unchanged
     private Surface lastInitReader, lastInitReader1, lastInitPreview, lastInitPreview1;
@@ -1078,6 +1084,7 @@ public final class Camera2SessionHook {
         cachedYuvFrameMap.clear();
         releaseCachedRetriever();
         lastYuvFrameWasFallback = true;
+        lastYuvFrameWasCodec = false;
         if (clearTrackedReaders) {
             trackedReaderSurfaces.clear();
             surfaceFormatMap.clear();
@@ -1162,6 +1169,12 @@ public final class Camera2SessionHook {
     }
 
     private void stopAllWhatsAppYuvPumps() {
+        // 停止 MediaCodec YUV 解码器
+        MediaCodecYuvDecoder dec = yuvDecoder;
+        if (dec != null) {
+            dec.stop();
+            yuvDecoder = null;
+        }
         Handler handler = whatsappYuvPumpHandler;
         if (handler != null) {
             for (YuvCallbackPump pump : whatsappYuvPumpMap.values()) {
@@ -1220,14 +1233,7 @@ public final class Camera2SessionHook {
                 cachedYuvFrameMap.put(targetSurface, cached);
                 needRefresh = true;
             }
-            long refreshInterval;
-            if (lastYuvFrameWasFallback) {
-                refreshInterval = YUV_CACHE_REFRESH_FALLBACK_MS;
-            } else if (width * height > YUV_HIRES_PIXEL_THRESHOLD) {
-                refreshInterval = YUV_CACHE_REFRESH_GL_HIRES_MS;
-            } else {
-                refreshInterval = YUV_CACHE_REFRESH_GL_MS;
-            }
+            long refreshInterval = computeYuvRefreshInterval(width, height);
             if (cached.isPlaceholder || now - cached.generatedAtMs >= refreshInterval || needRefresh) {
                 CachedYuvFrame refreshed = buildCachedYuvFrame(targetSurface, width, height, now);
                 if (refreshed != null) {
@@ -1299,14 +1305,7 @@ public final class Camera2SessionHook {
         // 缓存由泵线程 preRefreshYuvCache 预先刷新，这里只读取
         CachedYuvFrame cached = cachedYuvFrameMap.get(targetSurface);
         long now = SystemClock.elapsedRealtime();
-        long refreshInterval;
-        if (lastYuvFrameWasFallback) {
-            refreshInterval = YUV_CACHE_REFRESH_FALLBACK_MS;
-        } else if (width * height > YUV_HIRES_PIXEL_THRESHOLD) {
-            refreshInterval = YUV_CACHE_REFRESH_GL_HIRES_MS;
-        } else {
-            refreshInterval = YUV_CACHE_REFRESH_GL_MS;
-        }
+        long refreshInterval = computeYuvRefreshInterval(width, height);
         boolean needRefresh = cached == null
                 || cached.width != width
                 || cached.height != height
@@ -1404,6 +1403,20 @@ public final class Camera2SessionHook {
     private int reusablePlaneW;
     private int reusablePlaneH;
 
+    /** 根据当前解码路径计算 YUV 缓存刷新间隔 */
+    private long computeYuvRefreshInterval(int width, int height) {
+        if (lastYuvFrameWasCodec) {
+            return YUV_CACHE_REFRESH_CODEC_MS;
+        }
+        if (lastYuvFrameWasFallback) {
+            return YUV_CACHE_REFRESH_FALLBACK_MS;
+        }
+        if (width * height > YUV_HIRES_PIXEL_THRESHOLD) {
+            return YUV_CACHE_REFRESH_GL_HIRES_MS;
+        }
+        return YUV_CACHE_REFRESH_GL_MS;
+    }
+
     private void ensureReusableBuffers(int width, int height) {
         int pixelCount = width * height;
         if (reusablePixelBuf == null || reusablePixelBufSize < pixelCount) {
@@ -1420,6 +1433,16 @@ public final class Camera2SessionHook {
     }
 
     private CachedYuvFrame buildCachedYuvFrame(Surface targetSurface, int width, int height, long nowMs) {
+        // 优先使用 MediaCodec 直出 YUV，绕过 GL→Bitmap→RGB→YUV
+        CachedYuvFrame codecFrame = tryBuildFromCodecDecoder(width, height, nowMs);
+        if (codecFrame != null) {
+            lastYuvFrameWasFallback = false;
+            lastYuvFrameWasCodec = true;
+            return codecFrame;
+        }
+        lastYuvFrameWasCodec = false;
+
+        // 回退到 GL 截帧 + RGB→YUV 转换
         Bitmap frame = captureFrameForYuv(width, height);
         if (frame == null) {
             return null;
@@ -1476,6 +1499,71 @@ public final class Camera2SessionHook {
         } finally {
             frame.recycle();
         }
+    }
+
+    /**
+     * 从 MediaCodec YUV 解码器获取帧并缩放到目标尺寸。
+     * 如果解码器未运行、尚无帧可用、或有旋转偏移，返回 null（回退到 GL 路径）。
+     */
+    private CachedYuvFrame tryBuildFromCodecDecoder(int width, int height, long nowMs) {
+        // 有用户旋转偏移时回退到 GL 路径（GL 渲染器原生支持旋转）
+        int rotation = VideoManager.getConfig().getInt(ConfigManager.KEY_VIDEO_ROTATION_OFFSET, 0);
+        if (rotation != 0) {
+            return null;
+        }
+        MediaCodecYuvDecoder dec = yuvDecoder;
+        if (dec == null || !dec.isRunning()) {
+            return null;
+        }
+        MediaCodecYuvDecoder.YuvFrame decoded = dec.acquireLatestFrame();
+        if (decoded == null) {
+            return null;
+        }
+
+        // 尺寸匹配：直接使用
+        if (decoded.width == width && decoded.height == height) {
+            return new CachedYuvFrame(width, height,
+                    decoded.yPlane, decoded.uPlane, decoded.vPlane,
+                    nowMs, decoded.timestampNs, false);
+        }
+
+        // 尺寸不匹配：缩放 YUV 平面
+        int srcW = decoded.width;
+        int srcH = decoded.height;
+        int dstW = width;
+        int dstH = height;
+
+        byte[] yOut = new byte[dstW * dstH];
+        int cDstW = dstW / 2;
+        int cDstH = dstH / 2;
+        byte[] uOut = new byte[cDstW * cDstH];
+        byte[] vOut = new byte[cDstW * cDstH];
+
+        // 最近邻缩放 Y 平面
+        for (int y = 0; y < dstH; y++) {
+            int srcY = y * srcH / dstH;
+            int srcRowOff = srcY * srcW;
+            int dstRowOff = y * dstW;
+            for (int x = 0; x < dstW; x++) {
+                yOut[dstRowOff + x] = decoded.yPlane[srcRowOff + x * srcW / dstW];
+            }
+        }
+
+        // 最近邻缩放 U/V 平面
+        int cSrcW = srcW / 2;
+        int cSrcH = srcH / 2;
+        for (int y = 0; y < cDstH; y++) {
+            int srcY = y * cSrcH / cDstH;
+            int srcRowOff = srcY * cSrcW;
+            int dstRowOff = y * cDstW;
+            for (int x = 0; x < cDstW; x++) {
+                int srcX = x * cSrcW / cDstW;
+                uOut[dstRowOff + x] = decoded.uPlane[srcRowOff + srcX];
+                vOut[dstRowOff + x] = decoded.vPlane[srcRowOff + srcX];
+            }
+        }
+
+        return new CachedYuvFrame(dstW, dstH, yOut, uOut, vOut, nowMs, decoded.timestampNs, false);
     }
 
     private CachedYuvFrame buildPlaceholderYuvFrame(int width, int height, long nowMs) {
@@ -1644,7 +1732,7 @@ public final class Camera2SessionHook {
             float fps = yuvFrameCount * 1000f / (now - yuvFpsWindowStartMs);
             LogUtil.log("【CS】YUV " + width + "x" + height
                     + " " + String.format(Locale.US, "%.1f", fps) + "fps"
-                    + (lastYuvFrameWasFallback ? " [fallback]" : " [GL]"));
+                    + (lastYuvFrameWasCodec ? " [Codec]" : lastYuvFrameWasFallback ? " [fallback]" : " [GL]"));
             yuvFrameCount = 0;
             yuvFpsWindowStartMs = now;
         }
@@ -1740,7 +1828,8 @@ public final class Camera2SessionHook {
                 dispatchWhatsAppYuvCallback(YuvCallbackPump.this);
                 long elapsed = SystemClock.elapsedRealtime() - startMs;
                 int pixels = imageReader.getWidth() * imageReader.getHeight();
-                long targetMs = pixels > YUV_HIRES_PIXEL_THRESHOLD ? 133L : 66L;
+                long targetMs = lastYuvFrameWasCodec ? 33L
+                        : (pixels > YUV_HIRES_PIXEL_THRESHOLD ? 133L : 66L);
                 long delay = Math.max(16L, targetMs - elapsed);
                 whatsappYuvPumpHandler.postDelayed(this, delay);
             }
@@ -1794,7 +1883,39 @@ public final class Camera2SessionHook {
     private void markYuvBridgeSessionReadyIfPossible() {
         yuvBridgeSessionReady = getActiveRenderer() != null || VideoManager.hasUsableMediaSource();
         if (yuvBridgeSessionReady) {
+            startOrRestartYuvDecoder();
             startDeferredYuvPumpsIfReady();
+        }
+    }
+
+    /** 启动或重启 MediaCodec YUV 解码器 */
+    private void startOrRestartYuvDecoder() {
+        if (!VideoManager.hasUsableMediaSource()) {
+            return;
+        }
+        MediaCodecYuvDecoder dec = yuvDecoder;
+        if (dec != null && dec.isRunning()) {
+            return; // 已在运行
+        }
+        if (dec != null) {
+            dec.stop();
+        }
+        dec = new MediaCodecYuvDecoder();
+        yuvDecoder = dec;
+        dec.start();
+        LogUtil.log("【CS】MediaCodec YUV 解码器已启动");
+    }
+
+    /** 媒体源变更时重启解码器（切换视频/旋转等） */
+    public void restartYuvDecoderForSourceChange() {
+        MediaCodecYuvDecoder dec = yuvDecoder;
+        if (dec != null) {
+            dec.stop();
+            yuvDecoder = null;
+        }
+        lastYuvFrameWasCodec = false;
+        if (yuvBridgeSessionReady) {
+            startOrRestartYuvDecoder();
         }
     }
 

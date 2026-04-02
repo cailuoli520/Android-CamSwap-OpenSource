@@ -130,11 +130,13 @@ public class HookMain {
                 @Override
                 public void onMediaSourceChanged() {
                     playerManager.restartAll();
+                    camera2Hook.restartYuvDecoderForSourceChange();
                 }
 
                 @Override
                 public void onRotationChanged(int degrees) {
                     playerManager.updateRotation(degrees);
+                    camera2Hook.restartYuvDecoderForSourceChange();
                 }
             });
             configWatcher.init(context);
